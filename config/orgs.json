@@ -1,0 +1,19 @@
+[
+  {
+    "id": "tszh_volna",
+    "name": "ТСЖ «Волна»",
+    "shortCode": "VOLNA",
+    "isActive": true,
+    "categories": [
+      { "id": "CAT_BRIBERY", "name": "Сбор «на ремонт» без отчетности" },
+      { "id": "CAT_PRIVACY", "name": "Утечка данных жильцов" },
+      { "id": "CAT_OTHER", "name": "Другое нарушение" }
+    ]
+  },
+  {
+    "id": "uni_novgorod",
+    "name": "Университет Новгород",
+    "shortCode": "UNIV-N",
+    "isActive": true
+  }
+]
