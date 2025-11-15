@@ -1,47 +1,65 @@
-## MAX TrustLine Bot
+# MAX TrustLine Bot
 
-Node.js implementation of the MAX TrustLine whistleblowing bot described in `prdmax.md`. The service exposes a secure HTTPS webhook for MAX, persists all entities in SQLite, and drives both the reporter and reviewer flows through inline keyboards only.
+Небольшой Node.js‑сервис, реализующий чат-бот для Messenger MAX по требованиям из `prdmax.md`: анонимные обращения, проверяющие по спискам/кодам, inline-клавиатуры и единая БД (SQLite).
 
-### Capabilities
-- Reporter wizard for selecting organization, category, entering a description, attachments, contact preference, and confirmation.
-- Short ticket IDs with status lookup + follow-up replies that stay anonymous for reviewers.
-- Reviewer verification via whitelist or access codes, reviewer inbox / in-progress / closed views, case actions, and bridged messaging back to reporters.
-- Attachment metadata retention, audit log entries for every state transition, and RU user-facing copy per PRD.
+## Требования
+- Node.js 20+ и npm 10+ (см. `requirements.txt` для полного списка библиотек и версий).
+- Доступный по HTTPS URL, на который MAX сможет слать вебхук (`WEBHOOK_URL`).
+- Токен бота MAX (`BOT_TOKEN`) и, по желанию, секрет подписи (`WEBHOOK_SECRET`).
+- Docker 24+ (если планируете контейнеризацию).
 
-### Requirements
-- Node.js 20+ (Node 24.11.0 tested)
-- MAX Bot token + HTTPS endpoint reachable by MAX
+## Конфигурация
+1. Скопируйте пример переменных:
+   ```bash
+   cp .env.example .env
+   ```
+2. Заполните `.env`:
+   - `BOT_TOKEN` — токен из кабинета MAX.
+   - `WEBHOOK_URL` — публичный `https://.../webhook/max`.
+   - `WEBHOOK_SECRET` — строка для проверки подписи запросов.
+   - `DB_URL`, `ORGS_CONFIG`, `REVIEWERS_WHITELIST`, `ACCESS_CODES` — при необходимости измените пути/DSN.
+3. Папка `config/` содержит примеры организаций и проверяющих; правьте под свои нужды.
 
-### Configuration
-1. Copy `.env.example` to `.env` and fill in:
-   - `BOT_TOKEN`, `WEBHOOK_URL`, `WEBHOOK_SECRET`
-   - `MAX_API_BASE_URL` (sandbox/production)
-   - `DB_URL` (e.g. `sqlite://data/trustline.db`)
-2. Adjust JSON configs under `config/`:
-   - `orgs.json`: organizations, optional category overrides
-   - `reviewers-whitelist.json`: org_id → array of MAX user IDs
-   - `access-codes.json`: fallback reviewer codes
-
-On startup the service syncs these files into SQLite.
-
-### Run
+## Локальный запуск
 ```bash
 npm install
 npm run dev
 ```
-The server exposes:
-- `POST /webhook/max` – MAX webhook endpoint (signed with `WEBHOOK_SECRET`)
-- `GET /healthz` – basic health probe
 
-When `WEBHOOK_URL` is set the service registers it with MAX automatically. Long polling can be added later by calling `MaxClient.fetchUpdates`.
+Сервис стартует на `http://localhost:8080`. Основные эндпоинты:
+- `POST /webhook/max` — точка входа для апдейтов MAX (должна быть доступна по HTTPS для боевого использования).
+- `GET /healthz` — проверка здоровья.
 
-### Project structure
-- `src/config/` – env parsing + constants
-- `src/db/` – SQLite connection, migrations, config sync
-- `src/services/` – persistence helpers (cases, reviewers, sessions, audit)
-- `src/bot/` – inline keyboards, localization, update handler
-- `src/max/client.js` – MAX HTTP client wrapper
+Для продакшен-запуска без авто‑перезапуска используйте:
+```bash
+npm run start
+```
 
-### Next steps / testing
-- Point MAX dev bot webhook at `/webhook/max` and walk through the scenarios listed in `prdmax.md`.
-- Use `npm run dev` locally with an ngrok/Cloudflared tunnel for manual verification.
+## Docker
+1. Сборка образа:
+   ```bash
+   docker build -t trustline-max .
+   ```
+2. Запуск контейнера (используем готовый `.env`):
+   ```bash
+   docker run --env-file .env -p 8080:8080 trustline-max
+   ```
+
+Контейнер экспонирует порт `8080`; пробросьте его наружу и убедитесь, что `WEBHOOK_URL` указывает на `https://<домен>/webhook/max`.
+
+## Структура проекта
+- `src/config` — загрузка конфигурации и констант (RU‑категории, статусы).
+- `src/db` — миграции SQLite и синк с файлами конфигурации.
+- `src/services` — работа с кейсами, проверяющими, сессиями, аудитом.
+- `src/bot` — обработка апдейтов MAX, клавиатуры, локализация.
+- `src/max` — минимальный HTTP‑клиент для Bot API.
+- `Dockerfile` — описание контейнерного образа.
+- `requirements.txt` — версии всех зависимостей.
+
+## Пример публикации вебхука
+После запуска убедитесь, что сервис доступен по адресу, указанному в `WEBHOOK_URL`. MAX можно уведомить автоматически (сервис сделает `setWebhook` при старте) либо вручную через кабинет разработчика. Важно, чтобы значение `WEBHOOK_SECRET` совпадало и на стороне бота, и в настройках MAX.
+
+## Проверка работоспособности
+1. Прогоните happy-path из `prdmax.md`: пользователь → организация → категория → текст → отправка → статус.
+2. Проверьте, что проверяющий из whitelist’а видит обращения и может менять статусы / писать в обе стороны.
+3. Протестируйте запуск контейнера локально и убедитесь, что обращения сохраняются в `data/trustline.db`.
